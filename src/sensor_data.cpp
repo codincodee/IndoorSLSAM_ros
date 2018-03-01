@@ -22,7 +22,7 @@ std::shared_ptr<slsam::Scan2D> Scan2D::ToSlsamScan() const {
     if (range > scan->range_max || range < scan->range_min) {
       continue;
     }
-    slsam::Point2D point;
+    slsam::Point2 point;
     auto angle = angle_min + angle_increment * i;
     point.x = range * sin(angle);
     point.y = range * cos(angle);
