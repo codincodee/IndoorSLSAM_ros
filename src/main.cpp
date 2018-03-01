@@ -38,7 +38,6 @@ bool GetMap(slsam::Slsam& slsam, nav_msgs::OccupancyGrid& map) {
 
   auto width = slsam_map->iw();
   auto height = slsam_map->ih();
-  cout << width << " " << height << endl;
   
   map.info.resolution = 0.5;
   map.info.width = width;
@@ -53,7 +52,6 @@ bool GetMap(slsam::Slsam& slsam, nav_msgs::OccupancyGrid& map) {
 }
 
 int main(int argc, char** argv) {
-  
   ros::init(argc, argv, "IndoorSLSAM");
   ros::NodeHandle nh;
   ros::Subscriber scan_sub = 
@@ -61,6 +59,7 @@ int main(int argc, char** argv) {
   ros::Publisher map_pub = 
       nh.advertise<nav_msgs::OccupancyGrid>("map", 1, true);
   slsam::Slsam slsam;
+  slsam.Init();
   while (ros::ok()) {
     ros::spinOnce();
     if (!AddScan(slsam, gScan)) {
