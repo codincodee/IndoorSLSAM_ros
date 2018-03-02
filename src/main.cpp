@@ -3,6 +3,7 @@
 #include <IndoorSLSAM_ros/sensor_data.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <iostream>
+#include <tf/transform_datatypes.h>
 
 using namespace std;
 using namespace slsam_ros;
@@ -39,15 +40,19 @@ bool GetMap(slsam::Slsam& slsam, nav_msgs::OccupancyGrid& map) {
   auto width = slsam_map->iw();
   auto height = slsam_map->ih();
   
-  map.info.resolution = 0.5;
-  map.info.width = width;
-  map.info.height = height;
-  map.data.reserve(width * height);
-  for (int h = 0; h < height; ++h) {
-    for (int w = 0; w < width; ++w) {
+  map.info.resolution = slsam_map->resolution;
+
+  // Handle the difference of map conventions between ros and IndoorSLSAM
+  map.info.width = height;
+  map.info.height = width;
+  for (int w = 0; w < width; ++w) {
+    for (int h = 0; h < height; ++h) {
       map.data.push_back(slsam_map->map(w, h) * 100);
     }
   }
+  map.info.origin.position.x = slsam_map->origin.y;
+  map.info.origin.position.y = slsam_map->origin.x;
+  map.info.origin.position.z = 0.0;
   return true;
 }
 
