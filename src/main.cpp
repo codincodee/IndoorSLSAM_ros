@@ -4,6 +4,7 @@
 #include <nav_msgs/OccupancyGrid.h>
 #include <iostream>
 #include <tf/transform_datatypes.h>
+#include <tf/transform_broadcaster.h>
 
 using namespace std;
 using namespace slsam_ros;
@@ -56,6 +57,21 @@ bool GetMap(slsam::Slsam& slsam, nav_msgs::OccupancyGrid& map) {
   return true;
 }
 
+void PublishPose(slsam::Slsam& slsam, tf::TransformBroadcaster& broadcaster) {
+  slsam::Translation2 translation;
+  slsam::Rotation2 rotation;
+  if (!slsam.GetPose(translation, rotation)) {
+    return;
+  }
+  tf::Transform transform;
+  transform.setOrigin(tf::Vector3(translation.x(), translation.y(), 0.0));
+  tf::Quaternion q;
+  q.setRPY(0.0, 0.0, rotation.angle());
+  transform.setRotation(q);
+  broadcaster.sendTransform(
+    tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
+}
+
 int main(int argc, char** argv) {
   ros::init(argc, argv, "IndoorSLSAM");
   ros::NodeHandle nh;
@@ -63,6 +79,7 @@ int main(int argc, char** argv) {
       nh.subscribe<sensor_msgs::LaserScan>("laserscan", 1, LaserScanCB);
   ros::Publisher map_pub = 
       nh.advertise<nav_msgs::OccupancyGrid>("map", 1, true);
+  tf::TransformBroadcaster tf_br;
   slsam::Slsam slsam;
   slsam.Init();
   while (ros::ok()) {
@@ -73,5 +90,6 @@ int main(int argc, char** argv) {
     nav_msgs::OccupancyGrid map;
     GetMap(slsam, map);
     map_pub.publish(map);
+    PublishPose(slsam, tf_br);
   }
 }
