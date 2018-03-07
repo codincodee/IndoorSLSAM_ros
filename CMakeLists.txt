@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   nav_msgs
   tf
+  geometry_msgs
 )
 
 find_package(IndoorSLSAM REQUIRED)

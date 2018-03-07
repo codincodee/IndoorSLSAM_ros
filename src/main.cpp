@@ -10,6 +10,7 @@ using namespace std;
 using namespace slsam_ros;
 
 Scan2D gScan;
+Odom gOdom;
 
 bool AddScan(slsam::Slsam& slsam, const Scan2D& scan) {
   static unsigned last_seq = 0;
@@ -21,6 +22,18 @@ bool AddScan(slsam::Slsam& slsam, const Scan2D& scan) {
     }
   }
   return false;
+} 
+
+bool AddOdom(slsam::Slsam& slsam, const Odom& odom) {
+  static unsigned last_seq = 0;
+  if (gOdom.odom) {
+    if (gOdom.odom->header.seq != last_seq) {
+      slsam.AddOdom(odom.ToSlsamOdom());
+      last_seq = gOdom.odom->header.seq;
+      return true;
+    }
+  }
+  return false;
 }
 
 void LaserScanCB(const sensor_msgs::LaserScan::ConstPtr& msg) {
@@ -28,6 +41,13 @@ void LaserScanCB(const sensor_msgs::LaserScan::ConstPtr& msg) {
     gScan.scan.reset(new sensor_msgs::LaserScan);
   }
   *gScan.scan = std::move(*msg);
+}
+
+void OdomCB(const nav_msgs::Odometry::ConstPtr& msg) {
+  if (!gOdom.odom) {
+    gOdom.odom.reset(new nav_msgs::Odometry);
+  }
+  *gOdom.odom = std::move(*msg);
 }
 
 bool GetMap(slsam::Slsam& slsam, nav_msgs::OccupancyGrid& map) {
@@ -77,6 +97,8 @@ int main(int argc, char** argv) {
   ros::NodeHandle nh;
   ros::Subscriber scan_sub = 
       nh.subscribe<sensor_msgs::LaserScan>("laserscan", 1, LaserScanCB);
+  ros::Subscriber odom_sub =
+      nh.subscribe<nav_msgs::Odometry>("odom", 1, OdomCB);
   ros::Publisher map_pub = 
       nh.advertise<nav_msgs::OccupancyGrid>("map", 1, true);
   tf::TransformBroadcaster tf_br;
@@ -84,6 +106,7 @@ int main(int argc, char** argv) {
   slsam.Init();
   while (ros::ok()) {
     ros::spinOnce();
+    AddOdom(slsam, gOdom);
     if (!AddScan(slsam, gScan)) {
       continue;
     }
