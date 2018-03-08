@@ -5,6 +5,7 @@
 #include <iostream>
 #include <tf/transform_datatypes.h>
 #include <tf/transform_broadcaster.h>
+#include <tf/transform_listener.h>
 
 using namespace std;
 using namespace slsam_ros;
@@ -64,32 +65,58 @@ bool GetMap(slsam::Slsam& slsam, nav_msgs::OccupancyGrid& map) {
   map.info.resolution = slsam_map->resolution;
 
   // Handle the difference of map conventions between ros and IndoorSLSAM
-  map.info.width = height;
-  map.info.height = width;
-  for (int w = 0; w < width; ++w) {
-    for (int h = 0; h < height; ++h) {
+  map.info.width = width;
+  map.info.height = height;
+  for (int h = 0; h < height; ++h) {
+    for (int w = 0; w < width; ++w) {
       map.data.push_back(slsam_map->map(w, h) * 100);
     }
   }
-  map.info.origin.position.x = slsam_map->origin.y;
-  map.info.origin.position.y = slsam_map->origin.x;
+  map.info.origin.position.x = slsam_map->origin.x;
+  map.info.origin.position.y = slsam_map->origin.y;
   map.info.origin.position.z = 0.0;
   return true;
 }
 
-void PublishPose(slsam::Slsam& slsam, tf::TransformBroadcaster& broadcaster) {
+bool PublishTransform(
+    slsam::Slsam& slsam, 
+    tf::TransformListener& listener,
+    tf::TransformBroadcaster& broadcaster) {
   slsam::Translation2 translation;
   slsam::Rotation2 rotation;
   if (!slsam.GetPose(translation, rotation)) {
-    return;
+    return false;
   }
-  tf::Transform transform;
-  transform.setOrigin(tf::Vector3(translation.x(), translation.y(), 0.0));
+  tf::StampedTransform odom_to_base_link;
+  try {
+    listener.lookupTransform(
+        "odom", "base_link", ros::Time(0), odom_to_base_link);
+  } catch (tf::TransformException &ex) {
+    ROS_ERROR("%s",ex.what());
+    return false;
+  }
+  tf::Transform trans;
+  trans.setOrigin(
+      tf::Vector3(
+          translation.x() - odom_to_base_link.getOrigin().x(),
+          translation.y() - odom_to_base_link.getOrigin().y(),
+          0.0f));
+  
+  double r, p, y;
+  tf::Matrix3x3 m(odom_to_base_link.getRotation());
+  m.getRPY(r, p, y);
   tf::Quaternion q;
-  q.setRPY(0.0, 0.0, rotation.angle());
-  transform.setRotation(q);
+  q.setRPY(0.0, 0.0, rotation.angle() - y);
+  trans.setRotation(q);
+  
+  tf::Transform tff;
+  tff.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
+  tf::Quaternion qq;
+  qq.setRPY(0.0, 0.0, 0.0);
+  tff.setRotation(qq);
   broadcaster.sendTransform(
-    tf::StampedTransform(transform, ros::Time::now(), "map", "base_link"));
+    tf::StampedTransform(trans, ros::Time::now(), "map", "odom"));
+  return true;
 }
 
 int main(int argc, char** argv) {
@@ -102,6 +129,7 @@ int main(int argc, char** argv) {
   ros::Publisher map_pub = 
       nh.advertise<nav_msgs::OccupancyGrid>("map", 1, true);
   tf::TransformBroadcaster tf_br;
+  tf::TransformListener tf_listener;
   slsam::Slsam slsam;
   slsam.Init();
   while (ros::ok()) {
@@ -113,6 +141,6 @@ int main(int argc, char** argv) {
     nav_msgs::OccupancyGrid map;
     GetMap(slsam, map);
     map_pub.publish(map);
-    PublishPose(slsam, tf_br);
+    PublishTransform(slsam, tf_listener, tf_br);
   }
 }
